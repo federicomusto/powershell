@@ -5,7 +5,7 @@ if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdenti
 }
 
 # Global Variables
-$ScriptVersion = "v2.4.1-EN"
+$ScriptVersion = "v2.4.2-EN"
 $RuleName = "SSH Port 22 Manual"
 $DefaultMacKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK/o0JIat4+Ep6Fl1sGWGjSAbmPgc0U37H16n+yQP6Jp federico@doghunter.org"
 $UserKeysFile = "C:\Users\feder\.ssh\authorized_keys"
@@ -418,6 +418,22 @@ function Open-WslLanPort {
     Write-Host "Firewall port $Port opened for LAN access." -ForegroundColor Green
 }
 
+function Close-WslLanPort {
+    param([int]$Port)
+    $ruleName = "WSL LAN Port $Port (Inbound)"
+    Remove-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue
+    Write-Host "Firewall port $Port CLOSED for LAN access." -ForegroundColor Red
+}
+
+function Toggle-WslLanPort {
+    param([int]$Port)
+    if ((Get-WslLanPortStatus -Port $Port) -eq "OPEN") {
+        Close-WslLanPort -Port $Port
+    } else {
+        Open-WslLanPort -Port $Port
+    }
+}
+
 function Restart-Wsl {
     Write-Host "Shutting down WSL (stops all distros and containers)..." -ForegroundColor Yellow
     wsl.exe --shutdown
@@ -435,10 +451,10 @@ function Show-SubMenu-WslLan {
         Write-Host " Firewall Port 8001: $(Get-WslLanPortStatus -Port 8001)" -ForegroundColor Yellow
         Write-Host "--------------------------------------------------"
         Write-Host " 1. Enable Mirrored Networking (.wslconfig)"
-        Write-Host " 2. Open Firewall Port 80 (HTTP - web site)"
-        Write-Host " 3. Open Firewall Port 443 (HTTPS)"
-        Write-Host " 4. Open Firewall Port 8001 (Backend API)"
-        Write-Host " 5. Open a Custom Port"
+        Write-Host " 2. Toggle Firewall Port 80 (HTTP - web site)"
+        Write-Host " 3. Toggle Firewall Port 443 (HTTPS)"
+        Write-Host " 4. Toggle Firewall Port 8001 (Backend API)"
+        Write-Host " 5. Toggle a Custom Port"
         Write-Host " 6. Restart WSL (wsl --shutdown)"
         Write-Host " 0. Back to Main Menu"
         Write-Host "--------------------------------------------------"
@@ -446,13 +462,13 @@ function Show-SubMenu-WslLan {
 
         switch ($subChoice) {
             '1' { Set-WslMirroredNetworking; Start-Sleep -Seconds 2 }
-            '2' { Open-WslLanPort -Port 80; Start-Sleep -Seconds 1 }
-            '3' { Open-WslLanPort -Port 443; Start-Sleep -Seconds 1 }
-            '4' { Open-WslLanPort -Port 8001; Start-Sleep -Seconds 1 }
+            '2' { Toggle-WslLanPort -Port 80; Start-Sleep -Seconds 1 }
+            '3' { Toggle-WslLanPort -Port 443; Start-Sleep -Seconds 1 }
+            '4' { Toggle-WslLanPort -Port 8001; Start-Sleep -Seconds 1 }
             '5' {
-                $port = Read-Host "Enter the port number to open"
+                $port = Read-Host "Enter the port number to toggle"
                 if ($port -match '^\d+$' -and [int]$port -ge 1 -and [int]$port -le 65535) {
-                    Open-WslLanPort -Port ([int]$port)
+                    Toggle-WslLanPort -Port ([int]$port)
                 } else {
                     Write-Host "Invalid port." -ForegroundColor Red
                 }

@@ -45,7 +45,7 @@ powershell -ExecutionPolicy Bypass -File .\sysadmin-tools.ps1
 
 7. **WSL2 LAN Access (Mirrored Networking)**
    - Enable `networkingMode=mirrored` in `.wslconfig`
-   - Open firewall ports (80 / 443 / 8001 / custom)
+   - Toggle firewall ports open/closed (80 / 443 / 8001 / custom)
    - Restart WSL (`wsl --shutdown`)
 
 ## WSL2 LAN access
