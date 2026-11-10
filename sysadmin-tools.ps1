@@ -5,7 +5,7 @@ if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdenti
 }
 
 # Global Variables
-$ScriptVersion = "v2.4.0-EN"
+$ScriptVersion = "v2.4.1-EN"
 $RuleName = "SSH Port 22 Manual"
 $DefaultMacKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK/o0JIat4+Ep6Fl1sGWGjSAbmPgc0U37H16n+yQP6Jp federico@doghunter.org"
 $UserKeysFile = "C:\Users\feder\.ssh\authorized_keys"
@@ -403,6 +403,13 @@ function Set-WslMirroredNetworking {
     Write-Host "Restart WSL (wsl --shutdown) to apply." -ForegroundColor Yellow
 }
 
+function Get-WslLanPortStatus {
+    param([int]$Port)
+    $ruleName = "WSL LAN Port $Port (Inbound)"
+    $rule = Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue
+    if ($rule -and $rule.Enabled -eq "True") { return "OPEN" } else { return "CLOSED" }
+}
+
 function Open-WslLanPort {
     param([int]$Port = 80)
     $ruleName = "WSL LAN Port $Port (Inbound)"
@@ -423,6 +430,10 @@ function Show-SubMenu-WslLan {
     do {
         Draw-Header
         Write-Host " --- SUBMENU: WSL2 LAN ACCESS (MIRRORED NETWORKING) ---" -ForegroundColor Green
+        Write-Host " Firewall Port 80:   $(Get-WslLanPortStatus -Port 80)" -ForegroundColor Yellow
+        Write-Host " Firewall Port 443:  $(Get-WslLanPortStatus -Port 443)" -ForegroundColor Yellow
+        Write-Host " Firewall Port 8001: $(Get-WslLanPortStatus -Port 8001)" -ForegroundColor Yellow
+        Write-Host "--------------------------------------------------"
         Write-Host " 1. Enable Mirrored Networking (.wslconfig)"
         Write-Host " 2. Open Firewall Port 80 (HTTP - web site)"
         Write-Host " 3. Open Firewall Port 443 (HTTPS)"
