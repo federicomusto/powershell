@@ -5,11 +5,16 @@ if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdenti
 }
 
 # Global Variables
-$ScriptVersion = "v2.4.2-EN"
+$ScriptVersion = "v2.5.2-EN"
 $RuleName = "SSH Port 22 Manual"
 $DefaultMacKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK/o0JIat4+Ep6Fl1sGWGjSAbmPgc0U37H16n+yQP6Jp federico@doghunter.org"
 $UserKeysFile = "C:\Users\feder\.ssh\authorized_keys"
 $AdminKeysFile = "C:\ProgramData\ssh\administrators_authorized_keys"
+$AmtTunnelMac = "fox@192.168.97.94"
+$AmtTunnelKey = "C:\Users\feder\.ssh\id_ed25519-git"
+$AmtTunnelPidFile = "C:\Users\feder\.amt-tunnel.pid"
+$SshPath = "C:\Windows\System32\OpenSSH\ssh.exe"
+$AmtTunnelLog = "C:\Users\feder\.amt-tunnel.log"
 
 # --- Status Functions ---
 function Get-SshdStatus {
@@ -69,6 +74,7 @@ function Draw-Header {
     Write-Host " Firewall Port 22:     $(Get-FirewallSshStatus)" -ForegroundColor Yellow
     Write-Host " PING Response (ICMP): $(Get-FirewallPingStatus)" -ForegroundColor Yellow
     Write-Host " WSL Mirrored Network: $(Get-WslMirroredStatus)" -ForegroundColor Yellow
+    Write-Host " AMT Tunnel (via Mac): $(Get-AmtTunnelStatus)" -ForegroundColor Yellow
     Write-Host "--------------------------------------------------"
 }
 
@@ -479,6 +485,73 @@ function Show-SubMenu-WslLan {
     } while ($subChoice -ne '0' -and $subChoice -ne '')
 }
 
+function Get-AmtTunnelStatus {
+    if (Test-Path $AmtTunnelPidFile) {
+        $tunnelPid = (Get-Content $AmtTunnelPidFile -ErrorAction SilentlyContinue).Trim()
+        if ($tunnelPid -match "^\d+$" -and (Get-Process -Id ([int]$tunnelPid) -ErrorAction SilentlyContinue)) {
+            return "ACTIVE (PID $tunnelPid)"
+        }
+    }
+    return "INACTIVE"
+}
+
+function Start-AmtTunnel {
+    if ((Get-AmtTunnelStatus) -like "ACTIVE*") {
+        Write-Host "AMT tunnel already active." -ForegroundColor Yellow
+        Start-Sleep -Seconds 1
+        return
+    }
+    $sshArgs = @(
+        "-N",
+        "-i", $AmtTunnelKey,
+        "-o", "ExitOnForwardFailure=yes",
+        "-o", "ServerAliveInterval=60",
+        "-L", "16993:192.168.99.147:16993",
+        "-L", "16995:192.168.99.147:16995",
+        "-L", "17993:192.168.99.153:16993",
+        "-L", "17995:192.168.99.153:16995",
+        $AmtTunnelMac
+    )
+    $proc = Start-Process $SshPath -ArgumentList $sshArgs -PassThru -WindowStyle Hidden -RedirectStandardError $AmtTunnelLog
+    Start-Sleep -Seconds 3
+    if ($proc -and -not $proc.HasExited) {
+        $proc.Id | Out-File -FilePath $AmtTunnelPidFile -Encoding ascii
+        Write-Host "AMT tunnel started (PID $($proc.Id))." -ForegroundColor Green
+        Write-Host "Set amt-cli config to 127.0.0.1 (fribourg 16993/16995, ms02ultra 17993/17995)." -ForegroundColor Cyan
+    } else {
+        $err = if (Test-Path $AmtTunnelLog) { ((Get-Content $AmtTunnelLog -Tail 3) -join " | ") } else { "ssh exited (no log)" }
+        Write-Host "AMT tunnel failed: $err" -ForegroundColor Red
+        Start-Sleep -Seconds 3
+    }
+}
+function Stop-AmtTunnel {
+    if (Test-Path $AmtTunnelPidFile) {
+        $tunnelPid = (Get-Content $AmtTunnelPidFile -ErrorAction SilentlyContinue).Trim()
+        if ($tunnelPid -match "^\d+$") { Stop-Process -Id ([int]$tunnelPid) -Force -ErrorAction SilentlyContinue }
+        Remove-Item $AmtTunnelPidFile -Force -ErrorAction SilentlyContinue
+        Write-Host "AMT tunnel stopped." -ForegroundColor Red
+    } else {
+        Write-Host "AMT tunnel not running." -ForegroundColor Yellow
+    }
+}
+
+function Show-SubMenu-AmtTunnel {
+    do {
+        Draw-Header
+        Write-Host " --- SUBMENU: AMT TUNNEL (VIA MAC $AmtTunnelMac) ---" -ForegroundColor Green
+        Write-Host " Status: $(Get-AmtTunnelStatus)" -ForegroundColor Yellow
+        Write-Host " 1. Enable AMT Tunnel"
+        Write-Host " 2. Disable AMT Tunnel"
+        Write-Host " 0. Back to Main Menu"
+        Write-Host "--------------------------------------------------"
+        $subChoice = Read-Host "Select an option (0-2)"
+        switch ($subChoice) {
+            '1' { Start-AmtTunnel; Start-Sleep -Seconds 1 }
+            '2' { Stop-AmtTunnel; Start-Sleep -Seconds 1 }
+        }
+    } while ($subChoice -ne "0" -and $subChoice -ne "")
+}
+
 function Show-HelpGuide {
     Clear-Host
     Write-Host "==================================================" -ForegroundColor Cyan
@@ -520,6 +593,7 @@ do {
     Write-Host " 5. Help & Setup Sequence Guide"
     Write-Host " 6. Restore Windows Default Settings (Factory Reset)"
     Write-Host " 7. WSL2 LAN Access (Mirrored Networking)"
+    Write-Host " 8. AMT Tunnel (via Mac)"
     Write-Host " 0. Exit (or press Enter)"
     Write-Host "--------------------------------------------------"
     
@@ -533,6 +607,7 @@ do {
         '5' { Show-HelpGuide }
         '6' { Restore-FactoryDefaults }
         '7' { Show-SubMenu-WslLan }
+        '8' { Show-SubMenu-AmtTunnel }
         '0' { Write-Host "Exiting..." -ForegroundColor Gray; break }
         ''  { Write-Host "Exiting..." -ForegroundColor Gray; break }
         default { Write-Host "Invalid Option!" -ForegroundColor Red; Start-Sleep -Seconds 1 }

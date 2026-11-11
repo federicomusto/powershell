@@ -48,6 +48,11 @@ powershell -ExecutionPolicy Bypass -File .\sysadmin-tools.ps1
    - Toggle firewall ports open/closed (80 / 443 / 8001 / custom)
    - Restart WSL (`wsl --shutdown`)
 
+8. **AMT Tunnel (via Mac)**
+   - Enable / disable an SSH tunnel through a LAN Mac jump host that
+     forwards Intel AMT ports (WS-Man + KVM redirection) to
+     `127.0.0.1`, so `amt-cli` works from a WAN/VPN location
+
 ## WSL2 LAN access
 
 WSL2 runs behind NAT, so services inside WSL (for example a web site on port
@@ -61,6 +66,21 @@ network interfaces) and opens the matching firewall port. After a
 ```
 http://<Windows-LAN-IP>
 ```
+
+## AMT tunnel (via Mac)
+
+Intel AMT/vPro devices answer WS-Man and KVM redirection only on their
+local subnet — the management engine (ME) often does not reply to hosts
+on another subnet (for example a laptop connected over a WireGuard VPN).
+Menu option 8 bridges this with an SSH tunnel through a Mac that sits on
+the AMT LAN.
+
+Enable the tunnel, then point `amt-cli` at `127.0.0.1` using the forwarded
+ports (WS-Man and redirection are offset per machine). Disable the tunnel
+to close the ports again.
+
+The Mac jump host must authorize the Windows machine's `id_ed25519-git`
+key before the tunnel can start non-interactively.
 
 ## License
 
